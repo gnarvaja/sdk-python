@@ -14,6 +14,8 @@ from requests.packages.urllib3.poolmanager import PoolManager
 import platform
 import ssl
 import sys
+import time
+
 
 class MPSSLAdapter(HTTPAdapter):
     def init_poolmanager(self, connections, maxsize, block=False):
@@ -23,6 +25,7 @@ class MPSSLAdapter(HTTPAdapter):
 
 class MPException(Exception):
     def __init__(self, value):
+        super(Exception, self).__init__(value)
         self.value = value
 
     def __repr__(self):
@@ -33,10 +36,11 @@ class MPInvalidCredentials(MPException):
 
 
 class MP(object):
-    version = "1.1.1"
+    version = "1.1.2"
     __access_data = None
     __ll_access_token = None
     __sandbox = False
+    __retries = 3
 
     def __init__(self, *args):
         """
@@ -72,13 +76,19 @@ class MP(object):
                            "grant_type": "client_credentials"
                            }
 
-        access_data = self.__rest_client.post("/oauth/token", None, app_client_values, self.__RestClient.MIME_FORM)
+        for x in range(self.__retries):
+            access_data = self.__rest_client.post("/oauth/token", None, app_client_values,
+                                                  self.__RestClient.MIME_FORM)
 
-        if access_data["status"] == 200:
-            self.__access_data = access_data["response"]
-            return  self.__access_data["access_token"]
-        else:
-            raise MPInvalidCredentials(str(access_data))
+            if access_data["status"] == 200:
+                self.__access_data = access_data["response"]
+                return self.__access_data["access_token"]
+            elif str(access_data["status"]).startswith("5"):  # Error 5xx are retryable
+                time.sleep(0.5 * (x + 1))
+                continue
+            else:
+                break
+        raise MPInvalidCredentials(str(access_data))
 
     def get_payment(self, id):
         """
