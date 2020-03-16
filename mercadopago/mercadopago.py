@@ -86,6 +86,10 @@ class MP(object):
             elif str(access_data["status"]).startswith("5"):  # Error 5xx are retryable
                 time.sleep(0.5 * (x + 1))
                 continue
+            elif access_data["status"] == 400 and access_data.get('error') == 'unknown_error':
+                # Error 400 unknown_error retryable
+                time.sleep(0.6 * (x + 1))
+                continue
             else:
                 break
         raise MPInvalidCredentials(str(access_data))
